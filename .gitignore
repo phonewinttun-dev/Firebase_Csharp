@@ -364,3 +364,5 @@ FodyWeavers.xsd
 # Firebase Secrets
 **/serviceAccountKey.json
 firebase_config.md
+/Firebase_Guide.md
+/project_architecture_and_overview.md
