@@ -361,4 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/serviceAccountKey.json
+# Firebase Secrets
+**/serviceAccountKey.json
+firebase_config.md

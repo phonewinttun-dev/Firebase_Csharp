@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Firebase_Csharp.Controllers
+namespace Firebase_Csharp.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

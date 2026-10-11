@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Firebase_Csharp.Domain\Firebase_Csharp.Domain.csproj" />
+    <ProjectReference Include="..\Firebase_Csharp.Shared\Firebase_Csharp.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

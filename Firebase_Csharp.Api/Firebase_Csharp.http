@@ -1,0 +1,6 @@
+@Firebase_Csharp_HostAddress = http://localhost:5206
+
+GET {{Firebase_Csharp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
