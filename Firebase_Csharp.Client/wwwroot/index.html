@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FCM Notification Flow Visualizer</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="Firebase_Csharp.Client.styles.css" rel="stylesheet" />
+</head>
+
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen">
+    <div id="app">
+        <div class="min-h-screen flex flex-col items-center justify-center p-4">
+            <div class="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin mb-4"></div>
+            <p class="text-sm font-mono text-slate-400">Loading FCM Flow Visualizer...</p>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" class="hidden fixed bottom-4 right-4 bg-rose-950 border border-rose-800 text-rose-200 px-4 py-3 rounded-lg shadow-xl text-sm z-50">
+        An unhandled error has occurred.
+        <a href="." class="reload ml-2 underline text-white font-semibold">Reload</a>
+        <span class="dismiss cursor-pointer ml-3 font-bold">✕</span>
+    </div>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

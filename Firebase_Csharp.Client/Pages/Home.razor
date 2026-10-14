@@ -1,0 +1,658 @@
+@page "/"
+@inject FirebaseInterop Firebase
+@inject HttpClient Http
+@implements IAsyncDisposable
+
+<div class="space-y-6">
+    <!-- Top Bar: Status & Config Toggle -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div class="flex items-center gap-3">
+            <span class="relative flex h-3 w-3">
+                <span class="@(string.IsNullOrEmpty(_deviceToken) ? "bg-amber-400" : "bg-emerald-400") animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"></span>
+                <span class="@(string.IsNullOrEmpty(_deviceToken) ? "bg-amber-500" : "bg-emerald-500") relative inline-flex rounded-full h-3 w-3"></span>
+            </span>
+            <div>
+                <p class="text-sm font-medium text-slate-200">
+                    @(string.IsNullOrEmpty(_deviceToken) ? "Client Device: Not Registered with FCM" : "Client Device: Ready & Listening for Push")
+                </p>
+                <p class="text-xs text-slate-400 font-mono">
+                    @(_clientStatusMessage ?? "Click 'Configure Web App' to connect your Firebase credentials.")
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button @onclick="() => _showConfigModal = !_showConfigModal"
+                    class="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
+                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Configure Web App
+            </button>
+            <button @onclick="RegisterClientAsync"
+                    disabled="@_isRegistering"
+                    class="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-500/20 transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
+                @if (_isRegistering)
+                {
+                    <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Registering...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span>Request Token &amp; Listen</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase Config Drawer/Modal -->
+    @if (_showConfigModal)
+    {
+        <div class="bg-slate-900 border border-indigo-500/30 rounded-xl p-5 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                    Firebase Web App Configuration (Browser Push)
+                </h3>
+                <span class="text-xs text-slate-400 font-mono">Saved in browser localStorage</span>
+            </div>
+            <p class="text-xs text-slate-400">
+                To receive real push notifications in this browser, paste your Firebase Web App configuration from the 
+                <a href="https://console.firebase.google.com" target="_blank" class="text-indigo-400 underline">Firebase Console</a>
+                (Project Settings &gt; General &gt; Your apps &gt; Web app &gt; SDK setup and configuration).
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1 font-mono">API Key (apiKey)</label>
+                    <input @bind="_apiKey" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1 font-mono">Project ID (projectId)</label>
+                    <input @bind="_projectId" placeholder="your-project-id" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1 font-mono">Messaging Sender ID (messagingSenderId)</label>
+                    <input @bind="_messagingSenderId" placeholder="123456789012" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1 font-mono">App ID (appId)</label>
+                    <input @bind="_appId" placeholder="1:123456789012:web:abcdef..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-slate-400 mb-1 font-mono">Web Push Certificate (VAPID Key)</label>
+                    <input @bind="_vapidKey" placeholder="BOn..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500" />
+                    <p class="text-[11px] text-slate-500 mt-1">Found in Firebase Console: Project Settings &gt; Cloud Messaging &gt; Web configuration &gt; Web Push certificates.</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button @onclick="SaveAndRegisterConfigAsync" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition cursor-pointer">
+                    Save Credentials &amp; Connect
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Visualizer Flow Pipeline -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-sm font-semibold text-white tracking-wide uppercase">Real-Time Notification Flow Pipeline</h2>
+                <p class="text-xs text-slate-400">Step-by-step dispatch, cloud delivery, and browser push verification</p>
+            </div>
+            @if (_isSending)
+            {
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse">
+                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    Flow Executing...
+                </span>
+            }
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+            <!-- Step 1 -->
+            <div class="relative p-4 rounded-xl border transition-all duration-300 @GetStepCardClass(_step1State)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Step 1</span>
+                    @GetStepIcon(_step1State)
+                </div>
+                <h4 class="text-sm font-semibold text-white mb-1">Client Dispatch</h4>
+                <p class="text-xs text-slate-400">Browser prepares payload &amp; triggers POST request</p>
+                <div class="mt-3 text-[11px] font-mono text-slate-500">
+                    @(_step1Latency != null ? $"Latency: {_step1Latency} ms" : "Ready")
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="relative p-4 rounded-xl border transition-all duration-300 @GetStepCardClass(_step2State)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Step 2</span>
+                    @GetStepIcon(_step2State)
+                </div>
+                <h4 class="text-sm font-semibold text-white mb-1">ASP.NET Core API</h4>
+                <p class="text-xs text-slate-400">Validates target and calls FirebaseAdmin SDK</p>
+                <div class="mt-3 text-[11px] font-mono text-slate-500">
+                    @(_step2Latency != null ? $"API Time: {_step2Latency} ms" : "Waiting")
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="relative p-4 rounded-xl border transition-all duration-300 @GetStepCardClass(_step3State)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Step 3</span>
+                    @GetStepIcon(_step3State)
+                </div>
+                <h4 class="text-sm font-semibold text-white mb-1">Firebase Cloud</h4>
+                <p class="text-xs text-slate-400">FCM processes message &amp; issues Message ID</p>
+                <div class="mt-3 text-[11px] font-mono text-slate-500 truncate" title="@_lastMessageId">
+                    @(string.IsNullOrEmpty(_lastMessageId) ? "Pending" : $"ID: {_lastMessageId}")
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="relative p-4 rounded-xl border transition-all duration-300 @GetStepCardClass(_step4State)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Step 4</span>
+                    @GetStepIcon(_step4State)
+                </div>
+                <h4 class="text-sm font-semibold text-white mb-1">Device Receiver</h4>
+                <p class="text-xs text-slate-400">Delivered to Service Worker / Browser Tab</p>
+                <div class="mt-3 text-[11px] font-mono text-slate-500">
+                    @(_step4Latency != null ? $"Delivered in: {_step4Latency} ms" : "Listening...")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Device Token Banner -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div class="flex-1 min-w-0">
+            <span class="text-slate-400 uppercase tracking-wider font-mono text-[10px] block mb-1">This Browser's FCM Registration Token:</span>
+            <div class="font-mono text-slate-300 bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 truncate select-all">
+                @(string.IsNullOrEmpty(_deviceToken) ? "No token yet. Click 'Request Token & Listen' to obtain one." : _deviceToken)
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+            @if (!string.IsNullOrEmpty(_deviceToken))
+            {
+                <button @onclick="CopyTokenAsync" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition cursor-pointer">
+                    @(_copiedToken ? "Copied! ✓" : "Copy Token")
+                </button>
+                <button @onclick="UseThisTokenForSender" class="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg transition cursor-pointer">
+                    Use in Sender ↓
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Main Content: Sender Form & Live Push Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Notification Dispatcher Form (7 cols) -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <h3 class="text-base font-semibold text-white">Dispatch Push Notification</h3>
+                <!-- Tab Switcher -->
+                <div class="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs font-medium">
+                    <button @onclick="() => _isTopicMode = false"
+                            class="px-3 py-1.5 rounded-md transition cursor-pointer @(!_isTopicMode ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")">
+                        Send to Device
+                    </button>
+                    <button @onclick="() => _isTopicMode = true"
+                            class="px-3 py-1.5 rounded-md transition cursor-pointer @(_isTopicMode ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")">
+                        Send to Topic
+                    </button>
+                </div>
+            </div>
+
+            <!-- Target Field -->
+            @if (!_isTopicMode)
+            {
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-medium text-slate-300">Target Device Token / FID</label>
+                        @if (!string.IsNullOrEmpty(_deviceToken))
+                        {
+                            <button @onclick="UseThisTokenForSender" class="text-[11px] text-indigo-400 hover:underline cursor-pointer">Paste my browser token</button>
+                        }
+                    </div>
+                    <textarea @bind="_targetToken" rows="2" placeholder="Paste target device FCM registration token (or FID)..."
+                              class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none transition"></textarea>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Target Topic Name</label>
+                    <input @bind="_targetTopic" @bind:event="oninput" placeholder="e.g. news, general-updates, test_topic"
+                           class="w-full bg-slate-950 border @(IsTopicMalformed ? "border-rose-500 focus:border-rose-500" : "border-slate-800 focus:border-indigo-500") rounded-xl px-3 py-2.5 text-xs font-mono text-slate-200 focus:outline-none transition" />
+                    @if (IsTopicMalformed)
+                    {
+                        <p class="text-[11px] text-rose-400 mt-1.5 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                            Topic names cannot contain spaces or special characters! Use letters, numbers, dashes (-), or underscores (_).
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="text-[11px] text-slate-500 mt-1">Format: Letters, numbers, -, _, ~, %, . (no spaces allowed by FCM)</p>
+                    }
+                </div>
+            }
+
+            <!-- Title & Body -->
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Notification Title</label>
+                    <input @bind="_notificationTitle" placeholder="Notification Title"
+                           class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none transition" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Notification Body</label>
+                    <textarea @bind="_notificationBody" rows="3" placeholder="Enter message payload..."
+                              class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition"></textarea>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button @onclick="SendNotificationAsync"
+                    disabled="@(_isSending || (_isTopicMode && IsTopicMalformed) || (!_isTopicMode && string.IsNullOrWhiteSpace(_targetToken)))"
+                    class="w-full py-3 px-4 rounded-xl font-medium text-xs text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2 cursor-pointer">
+                @if (_isSending)
+                {
+                    <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Dispatching via ASP.NET Core API...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <span>Dispatch Notification</span>
+                }
+            </button>
+        </div>
+
+        <!-- Incoming Notification Feed & Logs (5 cols) -->
+        <div class="lg:col-span-5 space-y-6">
+            <!-- Received Push Notification Mockup Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full @(_lastReceivedMessage != null ? "bg-emerald-400 animate-ping" : "bg-slate-600")"></span>
+                        Last Push Notification Received
+                    </h3>
+                    @if (_lastReceivedMessage != null)
+                    {
+                        <span class="text-[11px] font-mono text-emerald-400">@_lastReceivedMessage.ReceivedAt</span>
+                    }
+                </div>
+
+                @if (_lastReceivedMessage != null)
+                {
+                    <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-4 space-y-2 shadow-inner">
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                </svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h4 class="text-sm font-bold text-white">@_lastReceivedMessage.Title</h4>
+                                <p class="text-xs text-slate-300 mt-0.5">@_lastReceivedMessage.Body</p>
+                            </div>
+                        </div>
+                        <details class="text-[10px] text-slate-500 font-mono pt-2 border-t border-slate-900 cursor-pointer">
+                            <summary class="hover:text-slate-400">View Raw Payload</summary>
+                            <pre class="mt-1 p-2 bg-slate-900 rounded overflow-x-auto text-slate-400">@_lastReceivedMessage.RawJson</pre>
+                        </details>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-8 text-slate-500 space-y-2">
+                        <svg class="w-8 h-8 mx-auto text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        <p class="text-xs">No push notifications received yet.</p>
+                        <p class="text-[11px] text-slate-600">Send a notification to your device token to see it appear here live.</p>
+                    </div>
+                }
+            </div>
+
+            <!-- Activity Logs Console -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-semibold text-white">Activity Log</h3>
+                    <button @onclick="() => _activityLogs.Clear()" class="text-[11px] text-slate-400 hover:text-white cursor-pointer">Clear</button>
+                </div>
+                <div class="space-y-2 max-h-60 overflow-y-auto font-mono text-xs pr-1">
+                    @if (_activityLogs.Count == 0)
+                    {
+                        <p class="text-slate-600 text-center py-4">No activity logged.</p>
+                    }
+                    @foreach (var log in _activityLogs)
+                    {
+                        <div class="p-2 rounded-lg bg-slate-950 border border-slate-800/60 flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <span class="text-[10px] text-slate-500 block">@log.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                <span class="text-xs @GetLogColor(log.Level)">@log.Detail</span>
+                            </div>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 shrink-0">@log.Step</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public enum StepState { Idle, Active, Success, Error }
+
+    private DotNetObjectReference<Home>? _dotNetRef;
+    private bool _showConfigModal = false;
+    private bool _isRegistering = false;
+    private bool _isSending = false;
+    private bool _copiedToken = false;
+    private bool _isTopicMode = false;
+
+    // Firebase Web Config Inputs
+    private string _apiKey = "";
+    private string _projectId = "";
+    private string _messagingSenderId = "";
+    private string _appId = "";
+    private string _vapidKey = "";
+
+    // Device / Client State
+    private string _deviceToken = "";
+    private string? _clientStatusMessage;
+
+    // Sender Inputs
+    private string _targetToken = "";
+    private string _targetTopic = "test-topic";
+    private string _notificationTitle = "Hello from ASP.NET Core!";
+    private string _notificationBody = "Testing Firebase Cloud Messaging Push Notification.";
+
+    // Flow Pipeline States
+    private StepState _step1State = StepState.Idle;
+    private StepState _step2State = StepState.Idle;
+    private StepState _step3State = StepState.Idle;
+    private StepState _step4State = StepState.Idle;
+
+    private long? _step1Latency;
+    private long? _step2Latency;
+    private long? _step4Latency;
+    private string? _lastMessageId;
+    private System.Diagnostics.Stopwatch? _flowStopwatch;
+
+    // Received Notification
+    private PushMessageDto? _lastReceivedMessage;
+    private readonly List<LogEntry> _activityLogs = [];
+
+    private bool IsTopicMalformed =>
+        !string.IsNullOrWhiteSpace(_targetTopic) &&
+        (_targetTopic.Contains(' ') || System.Text.RegularExpressions.Regex.IsMatch(_targetTopic, @"[^a-zA-Z0-9-_.~%]"));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            var savedConfigJson = await Firebase.InitializeAsync(_dotNetRef);
+            if (!string.IsNullOrEmpty(savedConfigJson))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(savedConfigJson);
+                    if (doc.RootElement.TryGetProperty("config", out var configElem))
+                    {
+                        if (configElem.TryGetProperty("apiKey", out var apiKey)) _apiKey = apiKey.GetString() ?? "";
+                        if (configElem.TryGetProperty("projectId", out var projId)) _projectId = projId.GetString() ?? "";
+                        if (configElem.TryGetProperty("messagingSenderId", out var senderId)) _messagingSenderId = senderId.GetString() ?? "";
+                        if (configElem.TryGetProperty("appId", out var appId)) _appId = appId.GetString() ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("vapidKey", out var vapid)) _vapidKey = vapid.GetString() ?? "";
+                    AddLog("Config", "Loaded saved Firebase Web credentials from localStorage.", "info");
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task SaveAndRegisterConfigAsync()
+    {
+        _showConfigModal = false;
+        await RegisterClientAsync();
+    }
+
+    private async Task RegisterClientAsync()
+    {
+        _isRegistering = true;
+        _clientStatusMessage = "Requesting notification permission & generating FCM token...";
+        StateHasChanged();
+
+        var configObj = new
+        {
+            apiKey = _apiKey,
+            projectId = _projectId,
+            messagingSenderId = _messagingSenderId,
+            appId = _appId
+        };
+        var configJson = System.Text.Json.JsonSerializer.Serialize(configObj);
+
+        try
+        {
+            await Firebase.RequestTokenAndListenAsync(configJson, _vapidKey);
+        }
+        catch (Exception ex)
+        {
+            AddLog("Error", $"Registration failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            _isRegistering = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyTokenAsync()
+    {
+        if (!string.IsNullOrEmpty(_deviceToken))
+        {
+            _copiedToken = await Firebase.CopyToClipboardAsync(_deviceToken);
+            StateHasChanged();
+            await Task.Delay(2000);
+            _copiedToken = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UseThisTokenForSender()
+    {
+        _isTopicMode = false;
+        _targetToken = _deviceToken;
+    }
+
+    private async Task SendNotificationAsync()
+    {
+        _isSending = true;
+        ResetPipeline();
+        _flowStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // Step 1: Client Dispatch
+        _step1State = StepState.Active;
+        AddLog("Step 1", "Preparing payload and dispatching to ASP.NET Core API...", "info");
+        StateHasChanged();
+        await Task.Delay(200); // Visual pacing
+
+        _step1Latency = _flowStopwatch.ElapsedMilliseconds;
+        _step1State = StepState.Success;
+        _step2State = StepState.Active;
+        StateHasChanged();
+
+        try
+        {
+            HttpResponseMessage response;
+            if (_isTopicMode)
+            {
+                var payload = new SendToTopicRequestDto
+                {
+                    Topic = _targetTopic,
+                    Title = _notificationTitle,
+                    Body = _notificationBody
+                };
+                AddLog("Step 2", $"POST /api/notification/send-to-topic (Topic: {_targetTopic})", "info");
+                response = await Http.PostAsJsonAsync("api/notification/send-to-topic", payload);
+            }
+            else
+            {
+                var payload = new SendToDeviceRequestDto
+                {
+                    DeviceToken = _targetToken,
+                    Title = _notificationTitle,
+                    Body = _notificationBody
+                };
+                AddLog("Step 2", $"POST /api/notification/send-to-device (Token: {_targetToken[..Math.Min(15, _targetToken.Length)]}...)", "info");
+                response = await Http.PostAsJsonAsync("api/notification/send-to-device", payload);
+            }
+
+            _step2Latency = _flowStopwatch.ElapsedMilliseconds - _step1Latency;
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<Result<NotificationResponseDto>>();
+                if (result != null && result.IsSuccess)
+                {
+                    _step2State = StepState.Success;
+                    _step3State = StepState.Success;
+                    _lastMessageId = result.Value?.MessageId ?? "Success";
+                    AddLog("Step 3", $"FCM Accepted! MessageId: {_lastMessageId}", "success");
+                    _step4State = StepState.Active; // Now waiting for browser push
+                }
+                else
+                {
+                    _step2State = StepState.Success;
+                    _step3State = StepState.Error;
+                    AddLog("Step 3", $"Firebase error: {result?.Message}", "error");
+                }
+            }
+            else
+            {
+                _step2State = StepState.Error;
+                _step3State = StepState.Error;
+                var errContent = await response.Content.ReadAsStringAsync();
+                AddLog("Step 2", $"API HTTP {(int)response.StatusCode}: {errContent}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            _step2State = StepState.Error;
+            _step3State = StepState.Error;
+            AddLog("Error", $"Connection error: {ex.Message}", "error");
+        }
+        finally
+        {
+            _isSending = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetPipeline()
+    {
+        _step1State = StepState.Idle;
+        _step2State = StepState.Idle;
+        _step3State = StepState.Idle;
+        _step4State = StepState.Idle;
+        _step1Latency = null;
+        _step2Latency = null;
+        _step4Latency = null;
+        _lastMessageId = null;
+    }
+
+    [JSInvokable]
+    public async Task OnTokenReceived(string token)
+    {
+        await InvokeAsync(() =>
+        {
+            _deviceToken = token;
+            _clientStatusMessage = "Device Token acquired!";
+            if (string.IsNullOrWhiteSpace(_targetToken))
+            {
+                _targetToken = token;
+            }
+            AddLog("Device", "FCM Device Token acquired successfully.", "success");
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnPushReceived(PushMessageDto message)
+    {
+        await InvokeAsync(() =>
+        {
+            _lastReceivedMessage = message;
+            _step4State = StepState.Success;
+            if (_flowStopwatch != null && _flowStopwatch.IsRunning)
+            {
+                _step4Latency = _flowStopwatch.ElapsedMilliseconds;
+                _flowStopwatch.Stop();
+            }
+            AddLog("Step 4", $"Push delivered to browser! Title: '{message.Title}'", "success");
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnStatusChanged(StatusDto status)
+    {
+        await InvokeAsync(() =>
+        {
+            _clientStatusMessage = status.Message;
+            AddLog("System", status.Message, status.Level);
+            StateHasChanged();
+        });
+    }
+
+    private void AddLog(string step, string detail, string level)
+    {
+        _activityLogs.Insert(0, new LogEntry(DateTime.Now, step, detail, level));
+        if (_activityLogs.Count > 50) _activityLogs.RemoveAt(_activityLogs.Count - 1);
+    }
+
+    private static string GetStepCardClass(StepState state) => state switch
+    {
+        StepState.Active => "bg-indigo-950/40 border-indigo-500 shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/30 animate-pulse",
+        StepState.Success => "bg-slate-900 border-emerald-500/50 shadow-sm",
+        StepState.Error => "bg-rose-950/30 border-rose-500 shadow-sm",
+        _ => "bg-slate-950 border-slate-800/80 opacity-60"
+    };
+
+    private static RenderFragment GetStepIcon(StepState state) => state switch
+    {
+        StepState.Active => @<span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></span>,
+        StepState.Success => @<svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>,
+        StepState.Error => @<svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>,
+        _ => @<span class="w-2 h-2 rounded-full bg-slate-700"></span>
+    };
+
+    private static string GetLogColor(string level) => level switch
+    {
+        "success" => "text-emerald-400",
+        "error" => "text-rose-400",
+        "warning" => "text-amber-400",
+        _ => "text-slate-300"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        await Firebase.DisposeAsync();
+    }
+
+    public record PushMessageDto(string Title, string Body, string ReceivedAt, string RawJson);
+    public record StatusDto(string Message, string Level);
+    public record LogEntry(DateTime Timestamp, string Step, string Detail, string Level);
+}

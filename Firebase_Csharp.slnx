@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Firebase_Csharp.Api/Firebase_Csharp.Api.csproj" />
+  <Project Path="Firebase_Csharp.Client/Firebase_Csharp.Client.csproj" Id="4ce3a703-4ab9-4cc5-b836-45e233852998" />
   <Project Path="Firebase_Csharp.Domain/Firebase_Csharp.Domain.csproj" />
   <Project Path="Firebase_Csharp.Shared/Firebase_Csharp.Shared.csproj" />
 </Solution>
