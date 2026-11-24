@@ -146,5 +146,19 @@ namespace Firebase_Csharp.Domain.Features
             }
         }
         #endregion
+
+        //#region Get Notification
+        //public async Task<Result<NotificationResponseDto>> GetAsync(CancellationToken cancellationToken)
+        //{
+
+        //}
+        //#endregion
+
+        //#region Delete Notification
+        //public async Task<Result<NotificationResponseDto>> DeleteAsync(string id, CancellationToken cancellation)
+        //{
+
+        //}
+        //#endregion
     }
 }

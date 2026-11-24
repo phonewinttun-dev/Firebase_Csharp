@@ -7,5 +7,7 @@ namespace Firebase_Csharp.Domain.Features
     {
         Task<Result<NotificationResponseDto>> SendToDeviceAsync(SendToDeviceRequestDto request);
         Task<Result<NotificationResponseDto>> SendToTopicAsync(SendToTopicRequestDto request);
+        //Task<Result<NotificationResponseDto>> GetAsync(CancellationToken cancellationToken);
+        //Task<Result<NotificationResponseDto>> DeleteAsync(int id, CancellationToken cancellationToken);
     }
 }

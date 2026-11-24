@@ -18,4 +18,9 @@ namespace Firebase_Csharp.Domain.Features.DTO
         public string Title { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
     }
+
+    public class DeleteNotificationRequestDto
+    {
+        public string MessageId { get; set; } = string.Empty;
+    }
 }
