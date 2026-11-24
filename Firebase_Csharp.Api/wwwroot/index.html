@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firebase Push Notification Demo</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 720px;
+            margin: 32px auto;
+            padding: 0 16px;
+            background: #f8fafc;
+            color: #0f172a;
+            line-height: 1.5;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 4px; }
+        .subtitle { color: #475569; margin-top: 0; font-size: 0.9rem; }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .card h2 { font-size: 1.05rem; margin: 0 0 12px 0; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-top: 10px; }
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font: inherit;
+            font-size: 0.9rem;
+        }
+        button {
+            margin-top: 12px;
+            padding: 9px 16px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        button:hover { background: #1d4ed8; }
+        button.secondary { background: #475569; }
+        button.secondary:hover { background: #334155; }
+        .row { display: flex; gap: 8px; align-items: center; }
+        .token-box {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            margin-top: 8px;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #334155;
+        }
+        .status.ok { color: #15803d; }
+        .status.err { color: #b91c1c; }
+        .notif-item {
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+        .notif-item small { color: #64748b; }
+    </style>
+</head>
+<body>
+    <h1>Firebase Push Notification Client</h1>
+    <p class="subtitle">
+        Simple HTML + JS test client &bull;
+        <a href="/scalar">Scalar</a> &bull;
+        <a href="/swagger">Swagger</a>
+    </p>
+
+    <!-- STEP 1: Firebase Web Config -->
+    <div class="card">
+        <h2>Step 1: Connect Firebase &amp; Get Device Token</h2>
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" placeholder="AIzaSy..." />
+
+        <label for="projectId">Project ID</label>
+        <input id="projectId" placeholder="your-project-id" />
+
+        <label for="messagingSenderId">Messaging Sender ID</label>
+        <input id="messagingSenderId" placeholder="123456789012" />
+
+        <label for="appId">App ID</label>
+        <input id="appId" placeholder="1:123456789012:web:abcdef..." />
+
+        <label for="vapidKey">Web Push Certificate (VAPID Key)</label>
+        <input id="vapidKey" placeholder="BOn..." />
+
+        <button id="connectBtn">Get Device Token</button>
+        <div id="tokenStatus" class="status"></div>
+
+        <div id="tokenContainer" style="display: none;">
+            <label>Your FCM Device Token (copy this for Swagger / Scalar / Postman):</label>
+            <div id="tokenDisplay" class="token-box"></div>
+            <button id="copyBtn" class="secondary" type="button">Copy Token</button>
+        </div>
+    </div>
+
+    <!-- STEP 2: Send Notification via ASP.NET Core API -->
+    <div class="card">
+        <h2>Step 2: Send Notification (via ASP.NET Core API)</h2>
+
+        <label for="sendMode">Send Mode</label>
+        <select id="sendMode">
+            <option value="device">Send to Device (POST /api/Notification/send-to-device)</option>
+            <option value="topic">Send to Topic (POST /api/Notification/send-to-topic)</option>
+        </select>
+
+        <div id="deviceInputGroup">
+            <label for="targetToken">Device Token</label>
+            <input id="targetToken" placeholder="Auto-filled after Step 1, or paste any FCM token" />
+        </div>
+
+        <div id="topicInputGroup" style="display: none;">
+            <label for="targetTopic">Topic Name (letters, numbers, -, _ only; no spaces)</label>
+            <input id="targetTopic" value="test-topic" placeholder="e.g. news, test-topic" />
+        </div>
+
+        <label for="notifTitle">Title</label>
+        <input id="notifTitle" value="Hello from ASP.NET Core!" />
+
+        <label for="notifBody">Body</label>
+        <textarea id="notifBody" rows="2">Testing Firebase Cloud Messaging.</textarea>
+
+        <button id="sendBtn">Send Notification</button>
+        <div id="sendStatus" class="status"></div>
+    </div>
+
+    <!-- STEP 3: Incoming Push Notifications -->
+    <div class="card">
+        <h2>Step 3: Received Notifications (Foreground)</h2>
+        <div id="notificationsList">
+            <p class="subtitle">No notifications received yet.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+
+        const STORAGE_KEY = "simple_fcm_config";
+        let unsubscribeOnMessage = null;
+
+        // DOM elements
+        const fields = ["apiKey", "projectId", "messagingSenderId", "appId", "vapidKey"];
+        const connectBtn = document.getElementById("connectBtn");
+        const copyBtn = document.getElementById("copyBtn");
+        const tokenStatus = document.getElementById("tokenStatus");
+        const tokenContainer = document.getElementById("tokenContainer");
+        const tokenDisplay = document.getElementById("tokenDisplay");
+
+        const sendMode = document.getElementById("sendMode");
+        const deviceInputGroup = document.getElementById("deviceInputGroup");
+        const topicInputGroup = document.getElementById("topicInputGroup");
+        const targetToken = document.getElementById("targetToken");
+        const targetTopic = document.getElementById("targetTopic");
+        const notifTitle = document.getElementById("notifTitle");
+        const notifBody = document.getElementById("notifBody");
+        const sendBtn = document.getElementById("sendBtn");
+        const sendStatus = document.getElementById("sendStatus");
+        const notificationsList = document.getElementById("notificationsList");
+
+        // Load saved Firebase config from localStorage (so you don't re-type it every time)
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            fields.forEach((id) => {
+                if (parsed[id]) document.getElementById(id).value = parsed[id];
+            });
+        }
+
+        // Toggle between Device and Topic inputs
+        sendMode.addEventListener("change", () => {
+            const isTopic = sendMode.value === "topic";
+            deviceInputGroup.style.display = isTopic ? "none" : "block";
+            topicInputGroup.style.display = isTopic ? "block" : "none";
+        });
+
+        // Step 1: Initialize Firebase, ask permission, get FCM token, and listen for messages
+        connectBtn.addEventListener("click", async () => {
+            const values = Object.fromEntries(
+                fields.map((id) => [id, document.getElementById(id).value.trim()])
+            );
+
+            if (!values.apiKey || !values.projectId || !values.messagingSenderId || !values.appId) {
+                setStatus(tokenStatus, "Please fill in API Key, Project ID, Messaging Sender ID, and App ID.", "err");
+                return;
+            }
+
+            // Save to localStorage for convenience
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+
+            const firebaseConfig = {
+                apiKey: values.apiKey,
+                projectId: values.projectId,
+                messagingSenderId: values.messagingSenderId,
+                appId: values.appId
+            };
+
+            try {
+                setStatus(tokenStatus, "Requesting browser notification permission...");
+
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") {
+                    setStatus(tokenStatus, "Notification permission was denied.", "err");
+                    return;
+                }
+
+                // Register the service worker (needed by Firebase Messaging)
+                const swUrl = `/firebase-messaging-sw.js?config=${encodeURIComponent(JSON.stringify(firebaseConfig))}`;
+                const swReg = await navigator.serviceWorker.register(swUrl);
+
+                // Initialize Firebase App & Messaging
+                const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+                const messaging = getMessaging(app);
+
+                // Get the FCM registration token for this browser
+                const token = await getToken(messaging, {
+                    vapidKey: values.vapidKey || undefined,
+                    serviceWorkerRegistration: swReg
+                });
+
+                if (!token) {
+                    setStatus(tokenStatus, "Could not get token. Check your Firebase config and VAPID key.", "err");
+                    return;
+                }
+
+                // Show token and auto-fill Step 2
+                tokenDisplay.textContent = token;
+                tokenContainer.style.display = "block";
+                targetToken.value = token;
+                setStatus(tokenStatus, "Connected! Listening for push notifications.", "ok");
+
+                // Listen for notifications while this tab is open (foreground)
+                if (unsubscribeOnMessage) unsubscribeOnMessage();
+                unsubscribeOnMessage = onMessage(messaging, (payload) => {
+                    const title = payload.notification?.title || "New Notification";
+                    const body = payload.notification?.body || "";
+                    addNotificationToUI(title, body);
+                });
+            } catch (err) {
+                setStatus(tokenStatus, `Error: ${err.message}`, "err");
+            }
+        });
+
+        // Copy token button
+        copyBtn.addEventListener("click", async () => {
+            await navigator.clipboard.writeText(tokenDisplay.textContent);
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => (copyBtn.textContent = "Copy Token"), 1500);
+        });
+
+        // Step 2: Call ASP.NET Core API to send a notification
+        sendBtn.addEventListener("click", async () => {
+            const isTopic = sendMode.value === "topic";
+            const url = isTopic
+                ? "/api/Notification/send-to-topic"
+                : "/api/Notification/send-to-device";
+
+            const body = isTopic
+                ? { topic: targetTopic.value.trim(), title: notifTitle.value, body: notifBody.value }
+                : { deviceToken: targetToken.value.trim(), title: notifTitle.value, body: notifBody.value };
+
+            try {
+                setStatus(sendStatus, "Sending...");
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+
+                if (res.ok && data.isSuccess) {
+                    setStatus(sendStatus, `Sent! MessageId: ${data.value?.messageId}`, "ok");
+                } else {
+                    setStatus(sendStatus, `Failed: ${data.message || JSON.stringify(data)}`, "err");
+                }
+            } catch (err) {
+                setStatus(sendStatus, `Request error: ${err.message}`, "err");
+            }
+        });
+
+        function setStatus(el, text, type = "") {
+            el.textContent = text;
+            el.className = `status ${type}`;
+        }
+
+        function addNotificationToUI(title, body) {
+            if (notificationsList.querySelector(".subtitle")) {
+                notificationsList.innerHTML = "";
+            }
+            const item = document.createElement("div");
+            item.className = "notif-item";
+
+            const strong = document.createElement("strong");
+            strong.textContent = title;
+
+            const p = document.createElement("div");
+            p.textContent = body;
+
+            const time = document.createElement("small");
+            time.textContent = new Date().toLocaleTimeString();
+
+            item.append(strong, p, time);
+            notificationsList.prepend(item);
+        }
+    </script>
+</body>
+</html>
